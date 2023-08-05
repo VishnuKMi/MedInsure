@@ -7,10 +7,17 @@
 
 # testing
 /coverage
+coverage.json
+typechain
+typechain-types
 
 # next.js
 /.next/
 /out/
+
+# Hardhat files
+cache
+artifacts
 
 # production
 /build

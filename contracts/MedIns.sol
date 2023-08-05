@@ -8,6 +8,7 @@ contract MedicalInsuranceClaim {
     uint8 public constant numConfirmationsRequired = 2;
 
     struct Claim {
+        uint256 claimId; // Added claimId field
         address patient;
         string ipfsHash;
         bool executed;
@@ -16,14 +17,16 @@ contract MedicalInsuranceClaim {
         bool rejectedByOwners;
     }
 
-    mapping(uint => mapping(address => bool)) public isConfirmed; // TODO: switch to 'TRUE' after execute
+    uint256 private nextClaimId; // Added nextClaimId variable to track the next claimId value
+
+    mapping(uint256 => mapping(address => bool)) public isConfirmed; // TODO: switch to 'TRUE' after execute
     Claim[] public claims;
     mapping(address => bytes32) public userRole; // New mapping to store user roles
 
-    event ClaimSubmitted(uint claimId, address patient, string ipfsHash);
-    event ClaimApproved(uint claimId, address approver);
-    event ClaimRejected(uint claimId, address rejecter);
-    event ClaimExecuted(uint claimId);
+    event ClaimSubmitted(uint256 claimId, address patient, string ipfsHash);
+    event ClaimApproved(uint256 claimId, address approver);
+    event ClaimRejected(uint256 claimId, address rejecter);
+    event ClaimExecuted(uint256 claimId);
 
     modifier onlyOwners() {
         require(
@@ -45,9 +48,13 @@ contract MedicalInsuranceClaim {
 
         userRole[_insuranceCompany] = bytes32("insurance"); // Set initial role for the insurance company
         userRole[_hospital] = bytes32("hospital"); // Set initial role for the hospital
-        uint claimId = claims.length;
+
+        uint256 claimId = nextClaimId; // Assign the nextClaimId value as the claimId
+        nextClaimId++; // Increment the nextClaimId value
+
         claims.push(
             Claim({
+                claimId: claimId,
                 patient: msg.sender,
                 ipfsHash: _ipfsHash,
                 executed: false,
@@ -59,12 +66,12 @@ contract MedicalInsuranceClaim {
         emit ClaimSubmitted(claimId, msg.sender, _ipfsHash);
     }
 
-    function approveClaim(uint _claimId) public onlyOwners {
+    function approveClaim(uint256 _claimId) public onlyOwners {
         require(_claimId < claims.length, "Invalid claimId");
-        // require(
-        //     !isConfirmed[_claimId][msg.sender],
-        //     "Claim is already approved or rejected by the owner"
-        // );
+        require(
+            !isConfirmed[_claimId][msg.sender],
+            "Claim is already approved or rejected by the owner"
+        );
         isConfirmed[_claimId][msg.sender] = true;
         emit ClaimApproved(_claimId, msg.sender);
         if (isClaimApproved(_claimId)) {
@@ -74,18 +81,18 @@ contract MedicalInsuranceClaim {
         }
     }
 
-    function rejectClaim(uint _claimId) public onlyOwners {
+    function rejectClaim(uint256 _claimId) public onlyOwners {
         require(_claimId < claims.length, "Invalid claimId");
-        // require(
-        //     !isConfirmed[_claimId][msg.sender],
-        //     "Claim is already approved or rejected by the owner"
-        // );
+        require(
+            !isConfirmed[_claimId][msg.sender],
+            "Claim is already approved or rejected by the owner"
+        );
         isConfirmed[_claimId][msg.sender] = true;
         claims[_claimId].rejectedByOwners = true;
         emit ClaimRejected(_claimId, msg.sender);
     }
 
-    function executeClaim(uint _claimId) internal onlyOwners {
+    function executeClaim(uint256 _claimId) internal onlyOwners {
         require(_claimId < claims.length, "Invalid claimId");
         require(!claims[_claimId].executed, "Claim is already executed");
         require(
@@ -98,27 +105,44 @@ contract MedicalInsuranceClaim {
         emit ClaimExecuted(_claimId);
     }
 
-    function isClaimApproved(uint _claimId) public view returns (bool) {
+    function isClaimApproved(uint256 _claimId) public view returns (bool) {
         require(_claimId < claims.length, "Invalid claimId");
-        uint approvalCount = 0;
-        if (isConfirmed[_claimId][hospital]) {
+        uint256 approvalCount = 0;
+        if (
+            isConfirmed[_claimId][hospital] &&
+            !claims[_claimId].rejectedByOwners
+        ) {
             approvalCount++;
         }
-        if (isConfirmed[_claimId][insuranceCompany]) {
+        if (
+            isConfirmed[_claimId][insuranceCompany] &&
+            !claims[_claimId].rejectedByOwners
+        ) {
             approvalCount++;
         }
         return approvalCount >= numConfirmationsRequired;
     }
 
-    function isClaimRejected(uint _claimId) public view returns (bool) {
+    function isClaimRejected(uint256 _claimId) public view returns (bool) {
         require(_claimId < claims.length, "Invalid claimId");
         return claims[_claimId].rejectedByOwners;
     }
 
-    // To fetch
-    function getUserRole(
-        address checkAddr
-    ) public view returns (string memory) {
+    function isActionTook(uint256 _claimId, address _addrToCheck)
+        public
+        view
+        returns (bool)
+    {
+        require(_claimId < claims.length, "Invalid claimId");
+        return
+            isConfirmed[_claimId][_addrToCheck];
+    }
+
+    function getUserRole(address checkAddr)
+        public
+        view
+        returns (string memory)
+    {
         bytes32 role = userRole[checkAddr];
         if (role == bytes32("insurance")) {
             return "insurance";
