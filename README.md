@@ -1,6 +1,6 @@
 # MedInsure
 
-This project demonstrates a
+This project demonstrates a Medical Insurance Claiming platform where patients can initiate on-chain claim requests and ensure swift fund release through collaborative review by hospitals and insurance authorities.
 
 Try running some of the following tasks:
 
